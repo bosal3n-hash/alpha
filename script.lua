@@ -87,7 +87,7 @@ local Config = {
         Name        = true,
         Health      = true,
         Distance    = true,
-        Tracer      = true,
+        Tracer      = flash,
         Skeleton    = true,          -- Green = Visible, Red = Behind Wall
         TeamCheck   = true,
         ShowNPCs    = true,
