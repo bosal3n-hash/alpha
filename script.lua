@@ -1,11 +1,11 @@
 --[[
     ========================================================================
-    ALPHA XK — ROBLOX AIMBOT + SKELETON ESP + RMB AUTO FIRE
+    ALPHA XK — ROBLOX AIMBOT + SKELETON ESP + RMB AUTO & RAPID FIRE
     Executor  : Xeno (Anti-Crash / Anti-Double-Inject Build)
-    Version   : 2.1
+    Version   : 2.2
     Features  : Instant Headshot Aimbot (RMB Hold, Camera, Smooth 0, Visible Priority)
                 Compatible ESP (Players + Bots/NPCs, Skeleton, Box, Name, HP, Dist, Tracer)
-                OUTHER Tab (Auto Fire ONLY when RMB is held & Target is Visible/Green)
+                OUTHER Tab (Auto Fire + Rapid Fire with collapsible arrow drawer)
                 Safe Mode Toggle (Off by default: Mouse + Smooth 0.92 [92] + WallCheck)
                 Menu Toggle Keybind: Home
     ========================================================================
@@ -96,8 +96,10 @@ local Config = {
     },
     Outher = {
         AutoFire     = true,         -- Fires ONLY when RMB keybind is active & Target is Visible
+        RapidFire    = true,         -- Integrated with Auto Fire for single-shot / semi-auto weapons
         FireDelay    = 0.02,
-        HoldDuration = 0.035,
+        RapidDelay   = 0.015,        -- Fast tap interval for single-shot weapons
+        HoldDuration = 0.025,
     },
 }
 
@@ -357,6 +359,138 @@ function UI.Toggle(parent, text, default, callback)
     return function(s)
         setVisual(s, false)
     end
+end
+
+function UI.AutoFireWithDrawer(parent, defaultAutoFire, onAutoFireChanged, onDrawerStateChanged)
+    local container = Create("Frame", {
+        Size = UDim2.new(1, 0, 0, 34),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Parent = parent,
+    }, {
+        Create("UIListLayout", {
+            Padding = UDim.new(0, 6),
+            SortOrder = Enum.SortOrder.LayoutOrder,
+        })
+    })
+
+    local frame = Create("Frame", {
+        Size = UDim2.new(1, 0, 0, 34),
+        LayoutOrder = 1,
+        BackgroundColor3 = Theme.elem,
+        BorderSizePixel = 0,
+        Parent = container,
+    }, { Corner(6) })
+
+    Create("TextLabel", {
+        Size = UDim2.new(1, -92, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "Auto Fire (On RMB)",
+        TextColor3 = Theme.text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.Gotham,
+        TextSize = 13,
+        Parent = frame,
+    })
+
+    -- Small arrow button that points down when Auto Fire is ON, and flips up to open sub-menu when clicked
+    local arrowBtn = Create("TextButton", {
+        Size = UDim2.new(0, 22, 0, 22),
+        Position = UDim2.new(1, -72, 0.5, -11),
+        BackgroundColor3 = Theme.panel,
+        Text = "▾",
+        TextColor3 = Theme.accent,
+        Font = Enum.Font.GothamBold,
+        TextSize = 12,
+        BorderSizePixel = 0,
+        Visible = defaultAutoFire and true or false,
+        Parent = frame,
+    }, { Corner(5) })
+
+    local btn = Create("Frame", {
+        Size = UDim2.new(0, 32, 0, 18),
+        Position = UDim2.new(1, -42, 0.5, -9),
+        BackgroundColor3 = defaultAutoFire and Theme.accent or Color3.fromRGB(60, 60, 70),
+        BorderSizePixel = 0,
+        Parent = frame,
+    }, { Corner(9) })
+
+    local knob = Create("Frame", {
+        Size = UDim2.new(0, 14, 0, 14),
+        Position = defaultAutoFire and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BorderSizePixel = 0,
+        Parent = btn,
+    }, { Corner(7) })
+
+    local drawer = Create("Frame", {
+        Size = UDim2.new(1, 0, 0, 0),
+        LayoutOrder = 2,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Visible = false,
+        Parent = container,
+    }, {
+        Create("UIPadding", {
+            PaddingLeft = UDim.new(0, 10),
+        }),
+        Create("UIListLayout", {
+            Padding = UDim.new(0, 6),
+            SortOrder = Enum.SortOrder.LayoutOrder,
+        })
+    })
+
+    local autoState = defaultAutoFire
+    local expanded = false
+
+    local function syncArrowAndDrawer()
+        if not autoState then
+            expanded = false
+            arrowBtn.Visible = false
+            drawer.Visible = false
+        else
+            arrowBtn.Visible = true
+            arrowBtn.Text = expanded and "▴" or "▾"
+            drawer.Visible = expanded
+        end
+        if onDrawerStateChanged then
+            onDrawerStateChanged()
+        end
+    end
+
+    local function applyAutoState(s)
+        autoState = s
+        btn.BackgroundColor3 = s and Theme.accent or Color3.fromRGB(60, 60, 70)
+        TweenService:Create(knob, TweenInfo.new(0.15), {
+            Position = s and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7),
+        }):Play()
+        syncArrowAndDrawer()
+        if onAutoFireChanged then
+            onAutoFireChanged(s)
+        end
+    end
+
+    applyAutoState(defaultAutoFire)
+
+    Create("TextButton", {
+        Size = UDim2.new(1, -80, 1, 0),
+        BackgroundTransparency = 1,
+        Text = "",
+        Parent = frame,
+    }).MouseButton1Click:Connect(function()
+        applyAutoState(not autoState)
+    end)
+
+    arrowBtn.MouseButton1Click:Connect(function()
+        if not autoState then return end
+        expanded = not expanded
+        syncArrowAndDrawer()
+    end)
+
+    return drawer
 end
 
 function UI.Slider(parent, text, min, max, default, callback)
@@ -802,9 +936,22 @@ UI.Toggle(ESPPage, "Team Check", Config.ESP.TeamCheck, function(v) Config.ESP.Te
 UI.Slider(ESPPage, "Max Distance", 100, 5000, Config.ESP.MaxDistance, function(v) Config.ESP.MaxDistance = v end)
 UI.Slider(ESPPage, "Text Size", 10, 24, Config.ESP.TextSize, function(v) Config.ESP.TextSize = v end)
 
--- ░░ OUTHER PAGE ░░
-UI.Toggle(OutherPage, "Auto Fire (On RMB)", Config.Outher.AutoFire, function(v) Config.Outher.AutoFire = v end)
-UI.Slider(OutherPage, "Fire Delay (s)", 0.01, 0.30, Config.Outher.FireDelay, function(v) Config.Outher.FireDelay = v end)
+-- ░░ OUTHER PAGE (AUTO FIRE + COLLAPSIBLE DRAWER WITH RAPID FIRE) ░░
+local autoFireDrawer = UI.AutoFireWithDrawer(OutherPage, Config.Outher.AutoFire, function(v)
+    Config.Outher.AutoFire = v
+end, RefreshCanvas)
+
+UI.Toggle(autoFireDrawer, "Rapid Fire", Config.Outher.RapidFire, function(v)
+    Config.Outher.RapidFire = v
+end)
+
+UI.Slider(autoFireDrawer, "Fire Delay (s)", 0.01, 0.30, Config.Outher.FireDelay, function(v)
+    Config.Outher.FireDelay = v
+end)
+
+UI.Slider(autoFireDrawer, "Rapid Delay (s)", 0.01, 0.20, Config.Outher.RapidDelay, function(v)
+    Config.Outher.RapidDelay = v
+end)
 
 for _, page in ipairs(allPages) do
     TrackConn(page:FindFirstChildOfClass("UIListLayout"):GetPropertyChangedSignal("AbsoluteContentSize"):Connect(RefreshCanvas))
@@ -1282,36 +1429,47 @@ local function ApplyInstantAim(target)
     end
 end
 
--- ░░ OUTHER AUTO FIRE (ONLY WHEN RMB IS ACTIVE & SKELETON IS GREEN) ░░
+-- ░░ OUTHER AUTO + RAPID FIRE (ONLY WHEN RMB IS ACTIVE & SKELETON IS GREEN) ░░
 local lastShotTime = 0
 local firingPulse = false
 
-local function TriggerShot()
+local function PerformSingleTap(holdTime)
+    local didMouse = false
+    if type(pressMouse1) == "function" then
+        didMouse = pcall(pressMouse1)
+        task.wait(holdTime)
+        if type(releaseMouse1) == "function" then
+            pcall(releaseMouse1)
+        end
+    elseif VirtualInputManager then
+        local center = Camera and Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.5) or Vector2.new(500, 500)
+        didMouse = pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 1)
+        end)
+        task.wait(holdTime)
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 1)
+        end)
+    end
+
+    local char = LocalPlayer.Character
+    local tool = char and char:FindFirstChildOfClass("Tool")
+    if tool and (not didMouse or not hasDrawing) then
+        pcall(function() tool:Activate() end)
+    end
+end
+
+local function TriggerShot(isRapid)
     if firingPulse then return end
     firingPulse = true
     task.spawn(function()
-        local didMouse = false
-        if type(pressMouse1) == "function" then
-            didMouse = pcall(pressMouse1)
-            task.wait(Config.Outher.HoldDuration)
-            if type(releaseMouse1) == "function" then
-                pcall(releaseMouse1)
-            end
-        elseif VirtualInputManager then
-            local center = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.5)
-            didMouse = pcall(function()
-                VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 1)
-            end)
-            task.wait(Config.Outher.HoldDuration)
-            pcall(function()
-                VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 1)
-            end)
-        end
-
-        local char = LocalPlayer.Character
-        local tool = char and char:FindFirstChildOfClass("Tool")
-        if tool and (not didMouse or not hasDrawing) then
-            pcall(function() tool:Activate() end)
+        if isRapid then
+            -- Fast double-tap cadence for single-shot / semi-auto weapons integrated with Auto Fire
+            PerformSingleTap(Config.Outher.HoldDuration)
+            task.wait(math.max(0.008, Config.Outher.RapidDelay * 0.5))
+            PerformSingleTap(Config.Outher.HoldDuration)
+        else
+            PerformSingleTap(Config.Outher.HoldDuration)
         end
         firingPulse = false
     end)
@@ -1322,10 +1480,13 @@ local function ProcessOutherAutoFire(currentTarget)
 
     local candidate = currentTarget or GetClosestTarget()
     if candidate and candidate.visible then
+        local activeDelay = Config.Outher.RapidFire
+            and math.min(Config.Outher.FireDelay, Config.Outher.RapidDelay)
+            or Config.Outher.FireDelay
         local now = os.clock()
-        if (now - lastShotTime) >= Config.Outher.FireDelay then
+        if (now - lastShotTime) >= activeDelay then
             lastShotTime = now
-            TriggerShot()
+            TriggerShot(Config.Outher.RapidFire)
         end
     end
 end
@@ -1393,4 +1554,4 @@ env.__ALPHA_XK_CLEANUP = function()
     end
 end
 
-print("[ALPHA XK v2.1] AIM + ESP + OUTHER + Safe Mode (Smooth 0.92 / 92 when ON) loaded.")
+print("[ALPHA XK v2.2] AIM + ESP + OUTHER (Auto Fire + Rapid Fire Drawer) loaded.")
