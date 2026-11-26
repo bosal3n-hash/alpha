@@ -2,10 +2,10 @@
     ========================================================================
     ALPHA XK — ROBLOX AIMBOT + SKELETON ESP + RMB AUTO & RAPID FIRE
     Executor  : Xeno (Anti-Crash / Anti-Double-Inject Build)
-    Version   : 2.2
+    Version   : 2.3
     Features  : Instant Headshot Aimbot (RMB Hold, Camera, Smooth 0, Visible Priority)
-                Compatible ESP (Players + Bots/NPCs, Skeleton, Box, Name, HP, Dist, Tracer)
-                OUTHER Tab (Auto Fire + Rapid Fire with collapsible arrow drawer)
+                Team Check covers Players + NPCs/Bots (No extra Aim UI buttons)
+                OUTHER Tab (Auto Fire + Rapid Fire Drawer + Bot-Only Wallbang)
                 Safe Mode Toggle (Off by default: Mouse + Smooth 0.92 [92] + WallCheck)
                 Menu Toggle Keybind: Home
     ========================================================================
@@ -76,7 +76,7 @@ local Config = {
         FOV        = 140,
         Smoothness = 0,              -- 0 = instant lock, 0.92 = 92 smooth, 1 = slowest
         Part       = "Head",         -- "Head" | "Neck" | "UpperTorso"
-        TeamCheck  = true,
+        TeamCheck  = true,           -- Applies to both Players and NPCs/Bots
         WallCheck  = false,          -- false = locks through walls when no visible target exists
         ShowFOV    = true,
         TargetNPCs = true,
@@ -95,11 +95,12 @@ local Config = {
         TextSize    = 14,
     },
     Outher = {
-        AutoFire     = true,         -- Fires ONLY when RMB keybind is active & Target is Visible
-        RapidFire    = true,         -- Integrated with Auto Fire for single-shot / semi-auto weapons
-        FireDelay    = 0.02,
-        RapidDelay   = 0.015,        -- Fast tap interval for single-shot weapons
-        HoldDuration = 0.025,
+        AutoFire       = true,       -- Fires ONLY when RMB keybind is active & Target is eligible
+        RapidFire      = true,       -- Integrated with Auto Fire for single-shot / semi-auto weapons
+        WallbangBots   = true,       -- Allows shooting through walls ONLY when target is a Bot/NPC
+        FireDelay      = 0.02,
+        RapidDelay     = 0.015,      -- Fast tap interval for single-shot weapons
+        HoldDuration   = 0.025,
     },
 }
 
@@ -141,6 +142,60 @@ local function IsBindMatch(input, bind)
             return input.KeyCode == bind and input.UserInputType == Enum.UserInputType.Keyboard
         end
     end
+    return false
+end
+
+-- ░░ UNIFIED TEAM CHECK (PLAYERS + BOTS / NPCs) ░░
+local function IsSameTeamEntity(char, plr)
+    local myTeam = LocalPlayer.Team
+    local myTeamName = myTeam and string.lower(myTeam.Name) or nil
+    local myTeamColor = myTeam and myTeam.TeamColor or nil
+
+    if plr then
+        if plr.Team and myTeam and plr.Team == myTeam then
+            return true
+        end
+        if plr.TeamColor and myTeamColor and plr.TeamColor == myTeamColor then
+            return true
+        end
+        return false
+    end
+
+    if not char then return false end
+
+    -- Check ObjectValue / StringValue / BrickColor attributes or children on NPC model
+    local okVal, teamObj = pcall(function()
+        return char:FindFirstChild("Team", true)
+    end)
+    if okVal and teamObj then
+        if teamObj:IsA("ObjectValue") and teamObj.Value and myTeam and teamObj.Value == myTeam then
+            return true
+        elseif teamObj:IsA("StringValue") and myTeamName and string.lower(teamObj.Value) == myTeamName then
+            return true
+        elseif teamObj:IsA("BrickColorValue") and myTeamColor and teamObj.Value == myTeamColor then
+            return true
+        end
+    end
+
+    local okAttr, attrTeam = pcall(function()
+        return char:GetAttribute("Team") or char:GetAttribute("TeamName")
+    end)
+    if okAttr and type(attrTeam) == "string" and myTeamName and string.lower(attrTeam) == myTeamName then
+        return true
+    end
+
+    -- Check ancestor folder/model names matching team name (e.g., "TeamA", "Blue", "Red")
+    if myTeamName and myTeamName ~= "" then
+        local curr = char.Parent
+        while curr and curr ~= Workspace do
+            local n = string.lower(curr.Name)
+            if n == myTeamName or string.find(n, myTeamName, 1, true) then
+                return true
+            end
+            curr = curr.Parent
+        end
+    end
+
     return false
 end
 
@@ -395,7 +450,6 @@ function UI.AutoFireWithDrawer(parent, defaultAutoFire, onAutoFireChanged, onDra
         Parent = frame,
     })
 
-    -- Small arrow button that points down when Auto Fire is ON, and flips up to open sub-menu when clicked
     local arrowBtn = Create("TextButton", {
         Size = UDim2.new(0, 22, 0, 22),
         Position = UDim2.new(1, -72, 0.5, -11),
@@ -888,7 +942,7 @@ minimizeBtn.MouseButton1Click:Connect(function()
     Main.Size = Content.Visible and UDim2.new(0, 286, 0, 440) or UDim2.new(0, 286, 0, 44)
 end)
 
--- ░░ AIM PAGE ░░
+-- ░░ AIM PAGE (NO EXTRA BUTTONS; TEAM CHECK COVERS PLAYERS + NPCs) ░░
 local setMethodUI
 local setSmoothUI
 local setWallCheckUI
@@ -936,7 +990,7 @@ UI.Toggle(ESPPage, "Team Check", Config.ESP.TeamCheck, function(v) Config.ESP.Te
 UI.Slider(ESPPage, "Max Distance", 100, 5000, Config.ESP.MaxDistance, function(v) Config.ESP.MaxDistance = v end)
 UI.Slider(ESPPage, "Text Size", 10, 24, Config.ESP.TextSize, function(v) Config.ESP.TextSize = v end)
 
--- ░░ OUTHER PAGE (AUTO FIRE + COLLAPSIBLE DRAWER WITH RAPID FIRE) ░░
+-- ░░ OUTHER PAGE (AUTO FIRE + RAPID FIRE DRAWER + BOT-ONLY WALLBANG) ░░
 local autoFireDrawer = UI.AutoFireWithDrawer(OutherPage, Config.Outher.AutoFire, function(v)
     Config.Outher.AutoFire = v
 end, RefreshCanvas)
@@ -951,6 +1005,10 @@ end)
 
 UI.Slider(autoFireDrawer, "Rapid Delay (s)", 0.01, 0.20, Config.Outher.RapidDelay, function(v)
     Config.Outher.RapidDelay = v
+end)
+
+UI.Toggle(OutherPage, "Wallbang Bots (NPC Only)", Config.Outher.WallbangBots, function(v)
+    Config.Outher.WallbangBots = v
 end)
 
 for _, page in ipairs(allPages) do
@@ -1244,7 +1302,7 @@ local function UpdateESP()
         local hum, hrp, head, torso = GetValidRig(char)
         if hum and hrp and head then
             activeChars[char] = true
-            local isTeam = plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team
+            local isTeam = IsSameTeamEntity(char, plr)
             DrawTargetESP(char, hum, hrp, head, torso, plr.Name, isTeam, false)
         end
     end
@@ -1274,7 +1332,8 @@ local function UpdateESP()
             seenNPCSignatures[gridKey] = true
 
             activeChars[model] = true
-            DrawTargetESP(model, vHum, hrp, head, torso, model.Name, false, true)
+            local isTeam = IsSameTeamEntity(model, nil)
+            DrawTargetESP(model, vHum, hrp, head, torso, model.Name, isTeam, true)
         end
     end
 
@@ -1315,7 +1374,7 @@ TrackConn(UserInputService.InputEnded:Connect(function(input)
     end
 end))
 
-local function CollectCandidate(char, refPos, bestVisible, bestVisibleDist, bestHidden, bestHiddenDist)
+local function CollectCandidate(char, isNPC, refPos, bestVisible, bestVisibleDist, bestHidden, bestHiddenDist)
     Camera = Camera or GetCam()
     if not Camera then
         return bestVisible, bestVisibleDist, bestHidden, bestHiddenDist
@@ -1342,19 +1401,23 @@ local function CollectCandidate(char, refPos, bestVisible, bestVisibleDist, best
     end
 
     local isVisible = IsCharacterVisible(char, head, torso, hrp)
+    local canFireThroughWall = isNPC and Config.Outher.WallbangBots
+
     local entry = {
         char = char,
+        isNPC = isNPC,
         part = part,
         pos = aimPos,
         screen = Vector2.new(screenPos.X, screenPos.Y),
         visible = isVisible,
+        canFire = isVisible or canFireThroughWall,
     }
 
     if isVisible then
         if d < bestVisibleDist then
             return entry, d, bestHidden, bestHiddenDist
         end
-    elseif not Config.Aim.WallCheck then
+    elseif (not Config.Aim.WallCheck) or canFireThroughWall then
         if d < bestHiddenDist then
             return bestVisible, bestVisibleDist, entry, d
         end
@@ -1375,9 +1438,9 @@ local function GetClosestTarget()
 
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr == LocalPlayer then continue end
-        if Config.Aim.TeamCheck and plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then continue end
+        if Config.Aim.TeamCheck and IsSameTeamEntity(plr.Character, plr) then continue end
         bestVisible, bestVisibleDist, bestHidden, bestHiddenDist = CollectCandidate(
-            plr.Character, refPos, bestVisible, bestVisibleDist, bestHidden, bestHiddenDist
+            plr.Character, false, refPos, bestVisible, bestVisibleDist, bestHidden, bestHiddenDist
         )
     end
 
@@ -1387,8 +1450,9 @@ local function GetClosestTarget()
                 NPCModels[model] = nil
                 continue
             end
+            if Config.Aim.TeamCheck and IsSameTeamEntity(model, nil) then continue end
             bestVisible, bestVisibleDist, bestHidden, bestHiddenDist = CollectCandidate(
-                model, refPos, bestVisible, bestVisibleDist, bestHidden, bestHiddenDist
+                model, true, refPos, bestVisible, bestVisibleDist, bestHidden, bestHiddenDist
             )
         end
     end
@@ -1429,7 +1493,7 @@ local function ApplyInstantAim(target)
     end
 end
 
--- ░░ OUTHER AUTO + RAPID FIRE (ONLY WHEN RMB IS ACTIVE & SKELETON IS GREEN) ░░
+-- ░░ OUTHER AUTO + RAPID FIRE (BOT WALLBANG ALLOWED; REAL PLAYERS REQUIRE VISIBILITY) ░░
 local lastShotTime = 0
 local firingPulse = false
 
@@ -1464,7 +1528,6 @@ local function TriggerShot(isRapid)
     firingPulse = true
     task.spawn(function()
         if isRapid then
-            -- Fast double-tap cadence for single-shot / semi-auto weapons integrated with Auto Fire
             PerformSingleTap(Config.Outher.HoldDuration)
             task.wait(math.max(0.008, Config.Outher.RapidDelay * 0.5))
             PerformSingleTap(Config.Outher.HoldDuration)
@@ -1479,7 +1542,8 @@ local function ProcessOutherAutoFire(currentTarget)
     if not Config.Outher.AutoFire or not aimActive then return end
 
     local candidate = currentTarget or GetClosestTarget()
-    if candidate and candidate.visible then
+    local allowedTarget = candidate and (candidate.visible or (candidate.isNPC and Config.Outher.WallbangBots))
+    if allowedTarget then
         local activeDelay = Config.Outher.RapidFire
             and math.min(Config.Outher.FireDelay, Config.Outher.RapidDelay)
             or Config.Outher.FireDelay
@@ -1554,4 +1618,4 @@ env.__ALPHA_XK_CLEANUP = function()
     end
 end
 
-print("[ALPHA XK v2.2] AIM + ESP + OUTHER (Auto Fire + Rapid Fire Drawer) loaded.")
+print("[ALPHA XK v2.3] Unified Team Check + Bot-Only Wallbang + Auto/Rapid Fire loaded.")
