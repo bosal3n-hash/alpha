@@ -73,7 +73,7 @@ local Config = {
         Keybind    = Enum.UserInputType.MouseButton2,
         Mode       = "Hold",         -- "Hold" | "Toggle"
         Method     = "Camera",       -- "Camera" | "Mouse"
-        FOV        = 140,
+        FOV        = 115,
         Smoothness = 0,              -- 0 = instant lock, 0.92 = 92 smooth, 1 = slowest
         Part       = "Head",         -- "Head" | "Neck" | "UpperTorso"
         TeamCheck  = true,           -- Applies to both Players and NPCs/Bots
